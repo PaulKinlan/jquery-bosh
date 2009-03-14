@@ -4,8 +4,9 @@
 		protocol: 'http://jabber.org/protocol/httpbind',
 		xmlns: 'urn:ietf:params:xml:ns:xmpp',
 		resource: 'jquery-bosh',
+		mechanism: 'PLAIN',
 		port: 5222,
-		debug: true // FIXME: Change back to false on release
+		debug: false // FIXME: Change back to false on release
 	};
 
   var errors = {
@@ -104,12 +105,12 @@
 		this.from = null;
 		this.message = null;
 		this.timestamp = null;
-    this.raw = packet;
+		this.raw = packet;
 
 		this.from = new Sender(packet);
 
 		if ($('body', packet).length > 0)
-      this.message = $.trim($('body', packet).text());
+			this.message = $.trim($('body:first', packet).text());
 
 		if ($('x[stamp]', packet).length > 0) {
 			ts = $('x[stamp]', packet).attr('stamp');
@@ -215,38 +216,51 @@
 
   			var auth = $.base64Encode(self.username + '@' + self.domain + String.fromCharCode(0) + self.username + String.fromCharCode(0) + self.password);
   			var xmlns = settings.xmlns + "-sasl";
-  			var data = buildTag.apply(null, ['auth', { xmlns: xmlns, mechanism: 'PLAIN' }, auth]);
-        var packet = self.body({}, data);
-  			self.send(packet, bindToStream);
+  			var data = "";
+			
+			var mechanism = settings.mechanism;
+			var data = "";
+			if(mechanism == "ANONYMOUS")
+			{
+				// SASL
+				data = buildTag.apply(null, ['auth', { xmlns: xmlns, mechanism: mechanism }, ""]);			
+			}
+			else
+			{
+				data = buildTag.apply(null, ['auth', { xmlns: xmlns, mechanism: mechanism }, auth]);
+			}
+			
+			var packet = self.body({}, data);
+			self.send(packet, bindToStream);
   		};
 
   		var bindToStream = function( response ) {
-  		  var data = buildTag.apply(null, ['iq', { xmlns: 'jabber:client', to: self.domain, type: 'set', id: 'bind_1' },
+			var data = buildTag.apply(null, ['iq', { xmlns: 'jabber:client', to: self.domain, type: 'set', id: 'bind_1' },
                                           [['bind', { xmlns: settings.xmlns + "-bind" }, 
 		                                        [['resource', settings.resource]]]]]);
   			var packet = self.body({ xmpp_restart: 'true' }, data);
-        self.send(packet, startSession);
+			self.send(packet, startSession);
   		};
 
   		var startSession = function( response ) {
-  		  var data = buildTag.apply(null, ['iq', { xmlns: 'jabber:client', to: self.domain, type: 'set', id: 'sess_1' },
+			var data = buildTag.apply(null, ['iq', { xmlns: 'jabber:client', to: self.domain, type: 'set', id: 'sess_1' },
                                           [['session', { xmlns: settings.xmlns + "-session" }]]]);
   			var packet = self.body({}, data);
-        self.send(packet, setPresence);
+			self.send(packet, setPresence);
   		};
 
   		var setPresence = function( response ) {
-  		  var data = buildTag.apply(null, ['presence', { xmlns: 'jabber:client' }]);
-        var packet = self.body({}, data);
+			var data = buildTag.apply(null, ['presence', { xmlns: 'jabber:client' }]);
+			var packet = self.body({}, data);
   			self.send(packet, completeLogin);
   		};
 
-      var completeLogin = function( response ) {
+		var completeLogin = function( response ) {
   			self.connected = true;
   			self.ingestPresences(response, self);
   			self.ingestMessages(response, self);
-				self.fillRoster(self);
-      };
+			self.fillRoster(self);
+		};
 
 			self.send(buildTag.apply(null, ['body', attributes]), login);  		
 		},
